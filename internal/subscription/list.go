@@ -65,3 +65,19 @@ func (l *List) UpdateSubscription(key, deviceId string) error {
 	l.subscriptions[key] = subscription
 	return nil
 }
+
+func (l *List) CheckSubscription(key, deviceId string) error {
+	l.mtx.RLock()
+	defer l.mtx.RUnlock()
+
+	subscription, ok := l.subscriptions[key]
+	if !ok {
+		return ErrSubscriptionNotFound
+	}
+
+	if subscription.DeviceId == nil || *subscription.DeviceId != deviceId {
+		return ErrUnregisteredDevice
+	}
+
+	return nil
+}
