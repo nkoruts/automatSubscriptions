@@ -8,8 +8,8 @@ import (
 
 // SubscriptionDTO
 type SubscriptionDTO struct {
-	Owner string
-	Days  int
+	Owner string `json:"owner"`
+	Days  int    `json:"days"`
 }
 
 func (s *SubscriptionDTO) ValidateRequest() error {
@@ -25,7 +25,7 @@ func (s *SubscriptionDTO) ValidateRequest() error {
 
 // SuccessDTO
 type SuccessDTO struct {
-	Success bool
+	Success bool `json:"success"`
 }
 
 func (s *SuccessDTO) ToString() string {
@@ -38,8 +38,8 @@ func (s *SuccessDTO) ToString() string {
 
 // ErrorDTO
 type ErrorDTO struct {
-	Message string
-	Time    time.Time
+	Message string    `json:"message"`
+	Time    time.Time `json:"time"`
 }
 
 func (e *ErrorDTO) ToString() string {
@@ -52,7 +52,14 @@ func (e *ErrorDTO) ToString() string {
 
 // UpdateDTO
 type UpdateDTO struct {
-	DeviceId string
+	DeviceId string `json:"deviceId"`
+}
+
+func (u *UpdateDTO) ValidateRequest() error {
+	if u.DeviceId == "" {
+		return errors.New("empty deviceId")
+	}
+	return nil
 }
 
 // CheckDTO
@@ -63,7 +70,10 @@ type CheckDTO struct {
 
 func (c *CheckDTO) ValidateRequest() error {
 	if c.Key == "" {
-		return errors.New("incorrect key")
+		return errors.New("empty key")
+	}
+	if c.DeviceID == "" {
+		return errors.New("empty deviceId")
 	}
 	return nil
 }

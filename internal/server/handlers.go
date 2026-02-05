@@ -59,12 +59,12 @@ func (h *HTTPHandlers) HandleCreateSubscription(w http.ResponseWriter, r *http.R
 	}
 
 	if err := h.subscriptionsList.AddSubscription(subsDTO.Owner, subsDTO.Days); err != nil {
-		httpErrorIs(subscription.ErrSubscriptionAlreadyExists, err, w)
+		httpErrorIs(err, subscription.ErrSubscriptionAlreadyExists, w)
 		return
 	}
 
 	successResp := SuccessDTO{Success: true}
-	b, err := json.MarshalIndent(successResp.ToString(), "", " ")
+	b, err := json.MarshalIndent(successResp, "", " ")
 	if err != nil {
 		panic(err)
 	}
@@ -85,7 +85,7 @@ func (h *HTTPHandlers) HandleDeleteSubscription(w http.ResponseWriter, r *http.R
 	key := mux.Vars(r)["key"]
 
 	if err := h.subscriptionsList.DeleteSubscription(key); err != nil {
-		httpErrorIs(subscription.ErrSubscriptionNotFound, err, w)
+		httpErrorIs(err, subscription.ErrSubscriptionNotFound, w)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -103,10 +103,15 @@ func (h *HTTPHandlers) HandleUpdateSubscription(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	if err := updateDTO.ValidateRequest(); err != nil {
+		httpError(w, err, http.StatusBadRequest)
+		return
+	}
+
 	key := mux.Vars(r)["key"]
 
 	if err := h.subscriptionsList.UpdateSubscription(key, updateDTO.DeviceId); err != nil {
-		httpErrorIs(subscription.ErrSubscriptionNotFound, err, w)
+		httpErrorIs(err, subscription.ErrSubscriptionNotFound, w)
 		return
 	}
 
@@ -139,7 +144,9 @@ func (h *HTTPHandlers) HandleCheckSubscription(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if err := h.subscriptionsList.CheckSubscription(checkDTO.Key, checkDTO.DeviceID); err != nil {
+	success, err := h.subscriptionsList.CheckSubscription(checkDTO.Key, checkDTO.DeviceID)
+
+	if err != nil {
 		errDTO := ErrorDTO{
 			Message: err.Error(),
 			Time:    time.Now(),
@@ -147,7 +154,7 @@ func (h *HTTPHandlers) HandleCheckSubscription(w http.ResponseWriter, r *http.Re
 
 		if errors.Is(err, subscription.ErrSubscriptionNotFound) {
 			http.Error(w, errDTO.ToString(), http.StatusNotFound)
-		} else if errors.Is(err, subscription.ErrUnregisteredDevice) {
+		} else if errors.Is(err, subscription.ErrUnregisteredUserDevice) {
 			http.Error(w, errDTO.ToString(), http.StatusForbidden)
 		} else {
 			http.Error(w, errDTO.ToString(), http.StatusInternalServerError)
@@ -155,7 +162,15 @@ func (h *HTTPHandlers) HandleCheckSubscription(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	successResp := SuccessDTO{Success: true}
+	if !success {
+		if err := h.subscriptionsList.UpdateSubscription(checkDTO.Key, checkDTO.DeviceID); err != nil {
+			httpErrorIs(err, subscription.ErrSubscriptionNotFound, w)
+			return
+		}
+		success = true
+	}
+
+	successResp := SuccessDTO{Success: success}
 	b, err := json.MarshalIndent(successResp, "", " ")
 	if err != nil {
 		panic(err)

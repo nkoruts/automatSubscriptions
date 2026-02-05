@@ -8,6 +8,8 @@ import (
 )
 
 func main() {
+	fmt.Println("Start HTTP server.")
+
 	subsList := subscription.NewList()
 	httpHandlers := server.NewHTTPHandlers(subsList)
 	httpServer := server.NewHTTPServer(httpHandlers)

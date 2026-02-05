@@ -15,7 +15,7 @@ func httpError(w http.ResponseWriter, err error, code int) {
 	http.Error(w, errDTO.ToString(), code)
 }
 
-func httpErrorIs(target, err error, w http.ResponseWriter) {
+func httpErrorIs(err, target error, w http.ResponseWriter) {
 	errDTO := ErrorDTO{
 		Message: err.Error(),
 		Time:    time.Now(),
