@@ -3,6 +3,7 @@ package subscription
 import (
 	"maps"
 	"sync"
+	"time"
 )
 
 type List struct {
@@ -81,6 +82,13 @@ func (l *List) CheckSubscription(key, deviceId string) (bool, error) {
 
 	if *subscription.DeviceId != deviceId {
 		return false, ErrUnregisteredUserDevice
+	}
+
+	if subscription.ExpiredAt.After(time.Now()) {
+		if err := l.DeleteSubscription(key); err != nil {
+			return false, err
+		}
+		return false, ErrSubscriptionExpired
 	}
 
 	return true, nil
