@@ -3,49 +3,38 @@ package server
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/gorilla/mux"
-
 	"github.com/nkoruts/automatSubscriptions/internal/subscription"
 )
 
+type SubscriptionStorage interface {
+	AddSubscription(owner string, days int) error
+	DeleteSubscription(key string) error
+	UpdateSubscription(key, deviceId string) error
+	CheckSubscription(key, deviceId string) (bool, error)
+	GetList() map[string]subscription.Subscription
+}
+
 type HTTPHandlers struct {
-	subscriptionsList *subscription.List
+	storage SubscriptionStorage
 }
 
-func NewHTTPHandlers(list *subscription.List) *HTTPHandlers {
+func NewHTTPHandlers(storage SubscriptionStorage) *HTTPHandlers {
 	return &HTTPHandlers{
-		subscriptionsList: list,
+		storage: storage,
 	}
 }
 
-/*
-pattern: /subscriptions
-method:  GET
-info:    -
-*/
+// GET /subscriptions
 func (h *HTTPHandlers) HandleGetAllSubscriptions(w http.ResponseWriter, r *http.Request) {
-	subscriptions := h.subscriptionsList.GetList()
-	bytes, err := json.MarshalIndent(subscriptions, "", "    ")
-	if err != nil {
-		panic(err)
-	}
-
-	w.WriteHeader(http.StatusOK)
-	if _, err := w.Write(bytes); err != nil {
-		fmt.Println("failed to write http response:", err)
-		return
-	}
+	subscriptions := h.storage.GetList()
+	writeJSON(w, http.StatusOK, subscriptions)
 }
 
-/*
-pattern: /subscriptions
-method: POST
-info: JSON in HTTP request body
-*/
+// POST /subscriptions
 func (h *HTTPHandlers) HandleCreateSubscription(w http.ResponseWriter, r *http.Request) {
 	var subsDTO SubscriptionDTO
 	if err := json.NewDecoder(r.Body).Decode(&subsDTO); err != nil {
@@ -58,44 +47,27 @@ func (h *HTTPHandlers) HandleCreateSubscription(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	if err := h.subscriptionsList.AddSubscription(subsDTO.Owner, subsDTO.Days); err != nil {
+	if err := h.storage.AddSubscription(subsDTO.Owner, subsDTO.Days); err != nil {
 		httpErrorIs(err, subscription.ErrSubscriptionAlreadyExists, w)
 		return
 	}
 
-	successResp := SuccessDTO{Success: true}
-	b, err := json.MarshalIndent(successResp, "", " ")
-	if err != nil {
-		panic(err)
-	}
-
-	w.WriteHeader(http.StatusCreated)
-	if _, err := w.Write(b); err != nil {
-		fmt.Println("failed to write http response:", err)
-		return
-	}
+	writeJSON(w, http.StatusCreated, SuccessDTO{Success: true})
 }
 
-/*
-pattern: /subscriptions/{key}
-method: DELETE
-info: pattern
-*/
+// DELETE /subscriptions/{key}
 func (h *HTTPHandlers) HandleDeleteSubscription(w http.ResponseWriter, r *http.Request) {
 	key := mux.Vars(r)["key"]
 
-	if err := h.subscriptionsList.DeleteSubscription(key); err != nil {
+	if err := h.storage.DeleteSubscription(key); err != nil {
 		httpErrorIs(err, subscription.ErrSubscriptionNotFound, w)
 		return
 	}
+
 	w.WriteHeader(http.StatusNoContent)
 }
 
-/*
-pattern: /subscriptions/{key}
-method: PATCH
-info: pattern + JSON in body request
-*/
+// PATCH /subscriptions/{key}
 func (h *HTTPHandlers) HandleUpdateSubscription(w http.ResponseWriter, r *http.Request) {
 	var updateDTO UpdateDTO
 	if err := json.NewDecoder(r.Body).Decode(&updateDTO); err != nil {
@@ -110,28 +82,15 @@ func (h *HTTPHandlers) HandleUpdateSubscription(w http.ResponseWriter, r *http.R
 
 	key := mux.Vars(r)["key"]
 
-	if err := h.subscriptionsList.UpdateSubscription(key, updateDTO.DeviceId); err != nil {
+	if err := h.storage.UpdateSubscription(key, updateDTO.DeviceId); err != nil {
 		httpErrorIs(err, subscription.ErrSubscriptionNotFound, w)
 		return
 	}
 
-	successResp := SuccessDTO{Success: true}
-	b, err := json.MarshalIndent(successResp, "", " ")
-	if err != nil {
-		panic(err)
-	}
-
-	if _, err := w.Write(b); err != nil {
-		fmt.Println("failed to write http response:", err)
-		return
-	}
+	writeJSON(w, http.StatusOK, SuccessDTO{Success: true})
 }
 
-/*
-pattern: /subscriptions/check
-method: POST
-info: JSON in body request
-*/
+// POST /subscriptions/check
 func (h *HTTPHandlers) HandleCheckSubscription(w http.ResponseWriter, r *http.Request) {
 	var checkDTO CheckDTO
 	if err := json.NewDecoder(r.Body).Decode(&checkDTO); err != nil {
@@ -144,40 +103,30 @@ func (h *HTTPHandlers) HandleCheckSubscription(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	success, err := h.subscriptionsList.CheckSubscription(checkDTO.Key, checkDTO.DeviceID)
-
+	success, err := h.storage.CheckSubscription(checkDTO.Key, checkDTO.DeviceID)
 	if err != nil {
 		errDTO := ErrorDTO{
 			Message: err.Error(),
 			Time:    time.Now(),
 		}
-
-		if errors.Is(err, subscription.ErrSubscriptionNotFound) {
+		switch {
+		case errors.Is(err, subscription.ErrSubscriptionNotFound):
 			http.Error(w, errDTO.ToString(), http.StatusNotFound)
-		} else if errors.Is(err, subscription.ErrUnregisteredUserDevice) {
+		case errors.Is(err, subscription.ErrUnregisteredUserDevice):
 			http.Error(w, errDTO.ToString(), http.StatusForbidden)
-		} else {
+		default:
 			http.Error(w, errDTO.ToString(), http.StatusInternalServerError)
 		}
 		return
 	}
 
 	if !success {
-		if err := h.subscriptionsList.UpdateSubscription(checkDTO.Key, checkDTO.DeviceID); err != nil {
+		if err := h.storage.UpdateSubscription(checkDTO.Key, checkDTO.DeviceID); err != nil {
 			httpErrorIs(err, subscription.ErrSubscriptionNotFound, w)
 			return
 		}
 		success = true
 	}
 
-	successResp := SuccessDTO{Success: success}
-	b, err := json.MarshalIndent(successResp, "", " ")
-	if err != nil {
-		panic(err)
-	}
-
-	if _, err := w.Write(b); err != nil {
-		fmt.Println("failed to write http response:", err)
-		return
-	}
+	writeJSON(w, http.StatusOK, SuccessDTO{Success: success})
 }
