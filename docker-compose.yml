@@ -1,0 +1,28 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:18
+    container_name: rpa_postgres
+    restart: always
+    environment:
+      POSTGRES_DB: subsdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  app:
+    build: .
+    container_name: rpa_app
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgres://postgres:pass@db:5432/subsdb?sslmode=disable
+    ports:
+      - "9091:9091"
+
+volumes:
+  pgdata:
