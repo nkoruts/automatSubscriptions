@@ -15,6 +15,7 @@ services:
   app:
     build: .
     container_name: rpa_app
+    restart: always
     depends_on:
       - db
     environment:
