@@ -3,7 +3,10 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // SubscriptionDTO
@@ -69,8 +72,9 @@ type CheckDTO struct {
 }
 
 func (c *CheckDTO) ValidateRequest() error {
-	if c.Key == "" {
-		return errors.New("empty key")
+	_, err := uuid.Parse(c.Key)
+	if err != nil {
+		return fmt.Errorf("invalid uuid format: %w", err)
 	}
 	if c.DeviceID == "" {
 		return errors.New("empty deviceId")
