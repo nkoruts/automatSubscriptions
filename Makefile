@@ -10,16 +10,24 @@ build:
 up:
 	docker compose up -d
 
-restart: stop build up
+stop:
+	docker compose down
+
+rebuild:
+	make stop
+	make build
+	make up
+
+restart:
+	make stop
+	make build
+	make up
 
 logs:
 	docker compose logs -f app
 
 ps:
 	docker compose ps
-
-stop:
-	docker compose down
 
 init:
 	cp .env.example .env
