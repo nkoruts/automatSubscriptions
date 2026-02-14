@@ -3,23 +3,36 @@ services:
     image: postgres:18
     container_name: rpa_postgres
     restart: always
+
     environment:
-      POSTGRES_DB: subsdb
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: pass
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
     ports:
       - "5432:5432"
+
     volumes:
       - pgdata:/var/lib/postgresql
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   app:
     build: .
     container_name: rpa_app
     restart: always
+
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+
     environment:
-      DATABASE_URL: postgres://postgres:pass@db:5432/subsdb?sslmode=disable
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
+
     ports:
       - "9091:9091"
 
